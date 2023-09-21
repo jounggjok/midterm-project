@@ -56,12 +56,11 @@ class RunawayGame:
 
 class Level:
     def __init__(self, id, seed=1234):
-        self.canvas = canvas
         self.id = id
         self.seed = seed
 
 
-class AnimatedTurtle(turtle.Raw):
+class AnimatedTurtle(turtle.RawTurtle):
     def __init__(self, canvas, step_move):
         super().__init__(canvas)
         self.step_move = step_move
@@ -99,22 +98,28 @@ class RandomMover(turtle.RawTurtle):
         elif mode == 2:
             self.right(self.step_turn)
 
+class App:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title('Turtle Runaway')
 
+        self.canvas = tk.Canvas(self.root, width=800, height=800)
+        self.canvas.pack()
+
+        self.screen = turtle.TurtleScreen(self.canvas)
+
+        self.runner = RandomMover(self.screen)
+        self.chaser = ManualMover(self.screen)
+
+        self.game = RunawayGame(self.screen, self.runner, self.chaser)
+
+    def start(self):
+        self.game.start()
+        self.screen.mainloop()
 
 def main():
-    # Use 'TurtleScreen' instead of 'Screen' to prevent an exception from the singleton 'Screen'
-    root = tk.Tk()
-    canvas = tk.Canvas(root, width=800, height=800)
-    canvas.pack()
-    screen = turtle.TurtleScreen(canvas)
-
-    # TODO) Change the follows to your turtle if necessary
-    runner = RandomMover(screen)
-    chaser = ManualMover(screen)
-
-    game = RunawayGame(screen, runner, chaser)
-    game.start()
-    screen.mainloop()
+    app = App()
+    app.start()
 
 if __name__ == '__main__':
     main()
