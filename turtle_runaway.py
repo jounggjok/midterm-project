@@ -7,8 +7,8 @@ from enum import Enum
 from dataclasses import dataclass, field
 
 class RunawayGame:
-    def __init__(self, canvas : tk.Canvas, runner, chaser, catch_radius=50):
-        self.canvas = canvas
+    def __init__(self, screen : turtle.TurtleScreen, runner:turtle.RawTurtle, chaser:turtle.RawTurtle, catch_radius=50):
+        self.screen = screen
         self.runner = runner
         self.chaser = chaser
         self.catch_radius2 = catch_radius**2
@@ -23,7 +23,7 @@ class RunawayGame:
         self.chaser.penup()
 
         # Instantiate an another turtle for drawing
-        self.drawer = turtle.RawTurtle(canvas)
+        self.drawer = turtle.RawTurtle(screen)
         self.drawer.hideturtle()
         self.drawer.penup()
 
@@ -41,7 +41,7 @@ class RunawayGame:
 
         # TODO) You can do something here and follows.
         self.ai_timer_msec = ai_timer_msec
-        self.canvas.ontimer(self.step, self.ai_timer_msec)
+        self.screen.ontimer(self.step, self.ai_timer_msec)
 
     def step(self):
         self.runner.run_ai(self.chaser.pos(), self.chaser.heading())
@@ -55,7 +55,7 @@ class RunawayGame:
         self.drawer.write(f'Is catched? {is_catched}')
 
         # Note) The following line should be the last of this function to keep the game playing
-        self.canvas.ontimer(self.step, self.ai_timer_msec)
+        self.screen.ontimer(self.step, self.ai_timer_msec)
 
 
 # direction enum
@@ -64,6 +64,7 @@ class Direction(Enum):
     RIGHT = 1
     UP = 2
     DOWN = 3
+
 
 @dataclass
 class GameObject:
@@ -82,10 +83,19 @@ class GameObject:
         self.__dict__.update(kwargs)
 
     def _tick(self, dt: float):
+        self.tick(dt)
         for child in self.children:
             child._tick(dt)
 
     def tick(self, dt: float):
+        pass
+
+    def _draw(self, pen: turtle.RawTurtle):
+        self.draw(pen)
+        for child in self.children:
+            child._draw(pen)
+
+    def draw(self, pen: turtle.RawTurtle):
         pass
     
 
@@ -96,13 +106,21 @@ class Level(GameObject):
         self.id : int = id
         self.seed : int = seed
 
+class AnimatedTurtle(GameObject):
+    """
+    Uses a seperate turtle to draw the animation instead of the general drawer
+    """
 
+    def __init__(self, game: RunawayGame, **kwargs):
+        super().__init__(game, **kwargs)
+        self.turtle = turtle.RawTurtle(game.screen)
+        self.turtle.hideturtle()
+        self.turtle.penup()
 
-class AnimatedTurtle(turtle.RawTurtle):
-    def __init__(self, canvas, step_move):
-        super().__init__(canvas)
-        self.step_move = step_move
-
+    def draw(self, _: turtle.RawTurtle):
+        self.turtle.setpos(self.x, self.y)
+        self.turtle.setheading(self.direction.value * 90)
+        self.turtle.showturtle()
 
 
 class ManualMover(turtle.RawTurtle):
