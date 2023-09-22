@@ -2,9 +2,12 @@
 # Please type '!python turtle_runaway.py' on IPython console in your Spyder.
 import tkinter as tk
 import turtle, random
+import math
+from enum import Enum
+from dataclasses import dataclass, field
 
 class RunawayGame:
-    def __init__(self, canvas, runner, chaser, catch_radius=50):
+    def __init__(self, canvas : tk.Canvas, runner, chaser, catch_radius=50):
         self.canvas = canvas
         self.runner = runner
         self.chaser = chaser
@@ -54,10 +57,45 @@ class RunawayGame:
         # Note) The following line should be the last of this function to keep the game playing
         self.canvas.ontimer(self.step, self.ai_timer_msec)
 
-class Level:
-    def __init__(self, id, seed=1234):
-        self.id = id
-        self.seed = seed
+
+# direction enum
+class Direction(Enum):
+    LEFT = 0
+    RIGHT = 1
+    UP = 2
+    DOWN = 3
+
+@dataclass
+class GameObject:
+    game: RunawayGame
+    x: float = 0
+    y: float = 0
+    direction: Direction = Direction.UP
+    x_vel: float = 0
+    y_vel: float = 0
+    children: list = field(default_factory=list)
+
+
+    def __init__(self, game: RunawayGame, **kwargs):
+        self.game = game
+        self.children : list[GameObject] = []
+        self.__dict__.update(kwargs)
+
+    def _tick(self, dt: float):
+        for child in self.children:
+            child._tick(dt)
+
+    def tick(self, dt: float):
+        pass
+    
+
+
+class Level(GameObject):
+    def __init__(self, game: RunawayGame, id:int, seed:int=1234, **kwargs):
+        super().__init__(game, **kwargs)
+        self.id : int = id
+        self.seed : int = seed
+
 
 
 class AnimatedTurtle(turtle.RawTurtle):
