@@ -27,6 +27,18 @@ class RunawayGame:
         self.drawer.hideturtle()
         self.drawer.penup()
 
+        self.sprites = {}
+
+    def load_sprite(self, filename:str, scale=1, size=None) -> str:
+        if filename in self.sprites:
+            return self.sprites[filename]
+
+        self.screen.register_shape(filename)
+        self.sprites[filename] = filename
+        return filename
+        
+
+
     def is_catched(self):
         p = self.runner.pos()
         q = self.chaser.pos()
