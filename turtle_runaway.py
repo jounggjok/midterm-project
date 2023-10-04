@@ -20,6 +20,24 @@ class RunawayGame:
         self.running = False
         self.tick_speed_ms = 1000 // 60
 
+        self.current_level = None
+        self.current_level_id = 0
+
+        self.load_level(self.current_level_id)
+
+
+    def load_level(self, level_id:int, seed:int=1234) -> None:
+        self.current_level = Level(self, level_id, seed)
+
+    def get_current_level(self):
+        return self.current_level
+    
+    def get_level_time(self):
+        if self.current_level is None:
+            return -1
+        
+        return self.current_level.time
+
     def load_sprite(self, filename:str, scale=1, size=None) -> str:
         if filename in self.sprites:
             return self.sprites[filename]
@@ -31,6 +49,9 @@ class RunawayGame:
     def loop(self):
         if not self.running:
             return
+        
+        if self.current_level is not None:
+            self.current_level._tick(self.tick_speed_ms / 1000)
         
         self.screen.ontimer(self.loop, self.tick_speed_ms)
 
@@ -48,9 +69,9 @@ class RunawayGame:
 
 # direction enum
 class Direction(Enum):
-    LEFT = 0
-    RIGHT = 1
-    UP = 2
+    RIGHT = 0
+    UP = 1
+    LEFT = 2
     DOWN = 3
 
 
@@ -69,6 +90,10 @@ class GameObject:
         self.game = game
         self.children : list[GameObject] = []
         self.__dict__.update(kwargs)
+        print(self.__dict__)
+
+    def add_child(self, child):
+        self.children.append(child)
 
     def _tick(self, dt: float):
         self.tick(dt)
@@ -93,6 +118,16 @@ class Level(GameObject):
         super().__init__(game, **kwargs)
         self.id : int = id
         self.seed : int = seed
+
+        self.time : float = 0
+
+        self.player = Player(game, x=400, y=400)
+        self.add_child(self.player)
+
+    def tick(self, dt: float):
+        self.time += dt
+
+
 
 class AnimatedTurtle(GameObject):
     """
@@ -120,7 +155,7 @@ class MovingTurtle(AnimatedTurtle):
     def __init__(self, game: RunawayGame, step_size: float = 10, **kwargs):
         super().__init__(game, **kwargs)
         self.step_size = step_size
-        self.turtle.speed(0.5)
+        self.turtle.speed(0.1)
 
     def left(self) -> None:
         self.direction = Direction.LEFT
@@ -155,7 +190,7 @@ class MovingTurtle(AnimatedTurtle):
 
 class Player(MovingTurtle):
     def __init__(self, game: RunawayGame, **kwargs):
-        super().__init__(game, **kwargs, step_size=10)
+        super().__init__(game, **kwargs, step_size=20)
         #self.turtle.shape(game.load_sprite('player.gif'))
         self.last_key = None
 
@@ -164,6 +199,9 @@ class Player(MovingTurtle):
     def tick(self, dt: float) -> None:
         """
         Called every frame, moves the player"""
+
+        # get current keys pressed
+
         if self.last_key is None:
             return
         
@@ -194,36 +232,6 @@ class Player(MovingTurtle):
 
 
 
-class ManualMover(turtle.RawTurtle):
-    def __init__(self, canvas, step_move=10, step_turn=10):
-        super().__init__(canvas)
-        self.step_move = step_move
-        self.step_turn = step_turn
-
-        # Register event handlers
-        canvas.onkeypress(lambda: self.forward(self.step_move), 'Up')
-        canvas.onkeypress(lambda: self.backward(self.step_move), 'Down')
-        canvas.onkeypress(lambda: self.left(self.step_turn), 'Left')
-        canvas.onkeypress(lambda: self.right(self.step_turn), 'Right')
-        canvas.listen()
-
-    def run_ai(self, opp_pos, opp_heading):
-        pass
-
-class RandomMover(turtle.RawTurtle):
-    def __init__(self, canvas, step_move=10, step_turn=10):
-        super().__init__(canvas)
-        self.step_move = step_move
-        self.step_turn = step_turn
-
-    def run_ai(self, opp_pos, opp_heading):
-        mode = random.randint(0, 2)
-        if mode == 0:
-            self.forward(self.step_move)
-        elif mode == 1:
-            self.left(self.step_turn)
-        elif mode == 2:
-            self.right(self.step_turn)
 
 class App:
     def __init__(self):
