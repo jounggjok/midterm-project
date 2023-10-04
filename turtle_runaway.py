@@ -129,7 +129,39 @@ class GameObject:
 
     def draw(self, pen: turtle.RawTurtle):
         pass
-    
+
+
+class TimedGameObject(GameObject):
+    """
+    displays children based on time with start and end time
+    """
+
+    def __init__(self, game: RunawayGame, start_time: float=0, end_time: float=1.0, duration: float=-1, **kwargs):
+        super().__init__(game, **kwargs)
+
+        self.timer = 0.0
+        self.start_time = start_time
+        self.end_time = end_time
+
+        if duration > 0:
+            self.end_time = self.start_time + duration
+
+        self.drawMe = False if self.start_time > 0 else True
+
+
+    def _draw(self, pen: turtle.RawTurtle):
+        if self.drawMe:
+            super()._draw(pen)
+
+    def tick(self, dt: float):
+        self.timer += dt
+
+        if self.timer > self.start_time and self.timer < self.end_time:
+            self.drawMe = True
+        else:
+            self.drawMe = False
+
+        super().tick(dt)
 
 
 class Level(GameObject):
@@ -148,6 +180,12 @@ class Level(GameObject):
 
     def tick(self, dt: float):
         self.time += dt
+
+    def is_completed(self):
+        return False
+    
+    def get_score(self):
+        return 0
 
 
 
