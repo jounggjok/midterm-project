@@ -6,6 +6,7 @@ import math
 from enum import Enum
 from dataclasses import dataclass, field
 
+
 class RunawayGame:
     def __init__(self, screen : turtle.TurtleScreen, root: tk.Tk):
         self.screen = screen
@@ -15,6 +16,8 @@ class RunawayGame:
         self.drawer = turtle.RawTurtle(screen)
         self.drawer.hideturtle()
         self.drawer.penup()
+        self.drawer.speed(0)
+        self.drawer._tracer(0, 0)
 
         self.sprites = {}
 
@@ -171,6 +174,7 @@ class Level(GameObject):
         self.seed : int = seed
 
         self.time : float = 0
+        self.timer = 9999
 
         self.player = Player(game, x=0, y=0)
         self.add_child(self.player)
@@ -178,11 +182,25 @@ class Level(GameObject):
         self.ai = AITurtle(game)
         self.add_child(self.ai)
 
+        self.generate_level()
+
+    def generate_level(self):
+        """
+        Generates the level based on id and seed
+        """
+        self.timer = 60 + self.id * 20
+
+    def _tick(self, dt: float):
+        if self.timer > 0:
+            return super()._tick(dt)
+
     def tick(self, dt: float):
         self.time += dt
+        self.timer -= dt
+        print(self.timer)
 
     def is_completed(self):
-        return False
+        return self.timer <= 0
     
     def get_score(self):
         return 0
@@ -201,6 +219,10 @@ class AnimatedTurtle(GameObject):
         self.turtle.shape('turtle')
         self.turtle.color('red')
         self.turtle.penup()
+        self.turtle.speed(0)
+        
+        self.turtle._tracer(0, 0)
+
 
     def draw(self, _: turtle.RawTurtle) -> None:
         self.turtle.setpos(self.x, self.y)
@@ -215,7 +237,6 @@ class MovingTurtle(AnimatedTurtle):
     def __init__(self, game: RunawayGame, step_size: float = 10, **kwargs):
         super().__init__(game, **kwargs)
         self.step_size = step_size
-        self.turtle.speed(0.1)
         self.speed: float = 1.0
 
     def left(self) -> None:
@@ -353,6 +374,8 @@ class App:
         self.canvas.pack()
 
         self.screen = turtle.TurtleScreen(self.canvas)
+        self.screen.bgcolor('lightblue')
+        self.screen.tracer(0, 0)
 
         self.game = RunawayGame(self.screen, self.root)
 
