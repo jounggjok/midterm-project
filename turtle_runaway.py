@@ -129,10 +129,91 @@ class AnimatedTurtle(GameObject):
         self.turtle.hideturtle()
         self.turtle.penup()
 
-    def draw(self, _: turtle.RawTurtle):
+    def draw(self, _: turtle.RawTurtle) -> None:
         self.turtle.setpos(self.x, self.y)
         self.turtle.setheading(self.direction.value * 90)
         self.turtle.showturtle()
+
+class MovingTurtle(AnimatedTurtle):
+    """
+    A turtle that moves
+    """
+
+    def __init__(self, game: RunawayGame, step_size: float = 10, **kwargs):
+        super().__init__(game, **kwargs)
+        self.step_size = step_size
+        self.turtle.speed(0.5)
+
+    def left(self) -> None:
+        self.direction = Direction.LEFT
+        self.turtle.setheading(self.direction.value * 90)
+        self.x -= self.step_size
+        
+        self.turtle.setpos(self.x, self.y)
+
+    def right(self) -> None:
+        self.direction = Direction.RIGHT
+        self.turtle.setheading(self.direction.value * 90)
+        self.x += self.step_size
+        self.turtle.setpos(self.x, self.y)
+
+    def up(self) -> None:
+        self.direction = Direction.UP
+        self.turtle.setheading(self.direction.value * 90)
+        self.y += self.step_size
+        self.turtle.setpos(self.x, self.y)
+
+    def down(self) -> None:
+        self.direction = Direction.DOWN
+        self.turtle.setheading(self.direction.value * 90)
+        self.y -= self.step_size
+        self.turtle.setpos(self.x, self.y)
+
+    def draw(self, _: turtle.RawTurtle) -> None:
+        # set position just in case
+        self.turtle.setpos(self.x, self.y)
+        return super().draw(_) # type: ignore
+    
+
+class Player(MovingTurtle):
+    def __init__(self, game: RunawayGame, **kwargs):
+        super().__init__(game, **kwargs, step_size=10)
+        #self.turtle.shape(game.load_sprite('player.gif'))
+        self.last_key = None
+
+        self._register_controls(game.screen)
+
+    def tick(self, dt: float) -> None:
+        """
+        Called every frame, moves the player"""
+        if self.last_key is None:
+            return
+        
+        match self.last_key:
+            case Direction.LEFT:
+                self.left()
+            case Direction.RIGHT:
+                self.right()
+            case Direction.UP:
+                self.up()
+            case Direction.DOWN:
+                self.down()
+            case _:
+                pass
+
+        # remove this to make the player move continuously
+        self.last_key = None
+
+    def _set_last_key(self, direction: Direction) -> None:
+        self.last_key = direction
+
+    def _register_controls(self, canvas: tk.Canvas) -> None:
+        canvas.onkeypress(lambda: self._set_last_key(Direction.UP), 'Up')
+        canvas.onkeypress(lambda: self._set_last_key(Direction.DOWN), 'Down')
+        canvas.onkeypress(lambda: self._set_last_key(Direction.LEFT), 'Left')
+        canvas.onkeypress(lambda: self._set_last_key(Direction.RIGHT), 'Right')
+        canvas.listen()
+
 
 
 class ManualMover(turtle.RawTurtle):
