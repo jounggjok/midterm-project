@@ -7,8 +7,9 @@ from enum import Enum
 from dataclasses import dataclass, field
 
 class RunawayGame:
-    def __init__(self, screen : turtle.TurtleScreen):
+    def __init__(self, screen : turtle.TurtleScreen, root: tk.Tk):
         self.screen = screen
+        self.root = root
 
         # Instantiate an another turtle for drawing
         self.drawer = turtle.RawTurtle(screen)
@@ -25,6 +26,22 @@ class RunawayGame:
 
         self.load_level(self.current_level_id)
 
+        self.pressed_keys = dict()
+
+        self.root.bind('<KeyPress>', self._on_key_press)
+        self.root.bind('<KeyRelease>', self._on_key_release)
+
+    def _on_key_press(self, event):
+        self.pressed_keys[event.keysym] = True
+
+    def _on_key_release(self, event):
+        self.pressed_keys[event.keysym] = False
+
+    def is_key_pressed(self, key):
+        return key in self.pressed_keys and self.pressed_keys[key]
+    
+    def get_keys_pressed(self):
+        return self.pressed_keys
 
     def load_level(self, level_id:int, seed:int=1234) -> None:
         self.current_level = Level(self, level_id, seed)
@@ -121,7 +138,7 @@ class Level(GameObject):
 
         self.time : float = 0
 
-        self.player = Player(game, x=400, y=400)
+        self.player = Player(game, x=0, y=0)
         self.add_child(self.player)
 
     def tick(self, dt: float):
@@ -156,30 +173,31 @@ class MovingTurtle(AnimatedTurtle):
         super().__init__(game, **kwargs)
         self.step_size = step_size
         self.turtle.speed(0.1)
+        self.speed: float = 1.0
 
     def left(self) -> None:
         self.direction = Direction.LEFT
         self.turtle.setheading(self.direction.value * 90)
-        self.x -= self.step_size
+        self.x -= self.step_size * self.speed
         
         self.turtle.setpos(self.x, self.y)
 
     def right(self) -> None:
         self.direction = Direction.RIGHT
         self.turtle.setheading(self.direction.value * 90)
-        self.x += self.step_size
+        self.x += self.step_size * self.speed
         self.turtle.setpos(self.x, self.y)
 
     def up(self) -> None:
         self.direction = Direction.UP
         self.turtle.setheading(self.direction.value * 90)
-        self.y += self.step_size
+        self.y += self.step_size * self.speed
         self.turtle.setpos(self.x, self.y)
 
     def down(self) -> None:
         self.direction = Direction.DOWN
         self.turtle.setheading(self.direction.value * 90)
-        self.y -= self.step_size
+        self.y -= self.step_size * self.speed
         self.turtle.setpos(self.x, self.y)
 
     def draw(self, _: turtle.RawTurtle) -> None:
@@ -189,46 +207,64 @@ class MovingTurtle(AnimatedTurtle):
     
 
 class Player(MovingTurtle):
-    def __init__(self, game: RunawayGame, **kwargs):
-        super().__init__(game, **kwargs, step_size=20)
-        #self.turtle.shape(game.load_sprite('player.gif'))
-        self.last_key = None
 
-        self._register_controls(game.screen)
+    DIRECTION_KEYS = [
+        "Left",
+        "Right",
+        "Up",
+        "Down",
+        "a",
+        "d",
+        "w",
+        "s"
+    ]
+
+    def __init__(self, game: RunawayGame, **kwargs):
+        super().__init__(game, **kwargs, step_size=10)
+        #self.turtle.shape(game.load_sprite('player.gif'))
+        self.last_keys = {key: -1 for key in self.DIRECTION_KEYS}
 
     def tick(self, dt: float) -> None:
         """
         Called every frame, moves the player"""
 
-        # get current keys pressed
-
-        if self.last_key is None:
-            return
+        # get current keys pressed, prioritise new presses over old ones
+        keys = self.game.get_keys_pressed()
         
-        match self.last_key:
-            case Direction.LEFT:
+        key = "None"
+        key_time = 2e9
+
+        # check direction keys
+        for d_key in self.last_keys:
+            if d_key in keys and keys[d_key]:
+                if self.last_keys[d_key] < key_time:
+                    key = d_key
+                    key_time = self.last_keys[d_key]
+                self.last_keys[d_key] = self.game.get_level_time()
+            else:
+                self.last_keys[d_key] = -1
+
+
+        
+        match key:
+            case "Left" | "a":
                 self.left()
-            case Direction.RIGHT:
+            case "Right" | "d":
                 self.right()
-            case Direction.UP:
+            case "Up" | "w":
                 self.up()
-            case Direction.DOWN:
+            case "Down" | "s":
                 self.down()
             case _:
                 pass
 
-        # remove this to make the player move continuously
-        self.last_key = None
 
-    def _set_last_key(self, direction: Direction) -> None:
-        self.last_key = direction
+        if "space" in keys and keys["space"]:
+            self.speed = 2.0
+        else:
+            self.speed = 1.0
 
-    def _register_controls(self, canvas: tk.Canvas) -> None:
-        canvas.onkeypress(lambda: self._set_last_key(Direction.UP), 'Up')
-        canvas.onkeypress(lambda: self._set_last_key(Direction.DOWN), 'Down')
-        canvas.onkeypress(lambda: self._set_last_key(Direction.LEFT), 'Left')
-        canvas.onkeypress(lambda: self._set_last_key(Direction.RIGHT), 'Right')
-        canvas.listen()
+
 
 
 
@@ -243,7 +279,7 @@ class App:
 
         self.screen = turtle.TurtleScreen(self.canvas)
 
-        self.game = RunawayGame(self.screen)
+        self.game = RunawayGame(self.screen, self.root)
 
     def start(self):
         self.game.start()
