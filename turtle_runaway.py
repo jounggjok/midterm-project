@@ -69,6 +69,8 @@ class RunawayGame:
         
         if self.current_level is not None:
             self.current_level._tick(self.tick_speed_ms / 1000)
+
+        self.screen.update()
         
         self.screen.ontimer(self.loop, self.tick_speed_ms)
 
@@ -140,6 +142,9 @@ class Level(GameObject):
 
         self.player = Player(game, x=0, y=0)
         self.add_child(self.player)
+
+        self.ai = AITurtle(game)
+        self.add_child(self.ai)
 
     def tick(self, dt: float):
         self.time += dt
@@ -265,7 +270,39 @@ class Player(MovingTurtle):
             self.speed = 1.0
 
 
+class AITurtle(MovingTurtle):
+    def __init__(self, game: RunawayGame, **kwargs):
+        super().__init__(game, **kwargs, step_size=10, x = random.randint(-400, 400), y = random.randint(-400, 400))
 
+    def tick(self, dt: float) -> None:
+        """
+        Called every frame, moves the turtle"""
+
+
+        player = None
+        for child in self.game.get_current_level().children:
+            if isinstance(child, Player):
+                player = child
+                break
+
+        if player is None:
+            return
+        
+        # get direction to player
+        dx = player.x - self.x
+        dy = player.y - self.y
+
+        # move towards player, pick the largest component
+        if abs(dx) > abs(dy):
+            if dx > 0:
+                self.right()
+            else:
+                self.left()
+        else:
+            if dy > 0:
+                self.up()
+            else:
+                self.down()
 
 
 
