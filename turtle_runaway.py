@@ -7,20 +7,8 @@ from enum import Enum
 from dataclasses import dataclass, field
 
 class RunawayGame:
-    def __init__(self, screen : turtle.TurtleScreen, runner:turtle.RawTurtle, chaser:turtle.RawTurtle, catch_radius=50):
+    def __init__(self, screen : turtle.TurtleScreen):
         self.screen = screen
-        self.runner = runner
-        self.chaser = chaser
-        self.catch_radius2 = catch_radius**2
-
-        # Initialize 'runner' and 'chaser'
-        self.runner.shape('turtle')
-        self.runner.color('blue')
-        self.runner.penup()
-
-        self.chaser.shape('turtle')
-        self.chaser.color('red')
-        self.chaser.penup()
 
         # Instantiate an another turtle for drawing
         self.drawer = turtle.RawTurtle(screen)
@@ -28,6 +16,9 @@ class RunawayGame:
         self.drawer.penup()
 
         self.sprites = {}
+
+        self.running = False
+        self.tick_speed_ms = 1000 // 60
 
     def load_sprite(self, filename:str, scale=1, size=None) -> str:
         if filename in self.sprites:
@@ -37,37 +28,22 @@ class RunawayGame:
         self.sprites[filename] = filename
         return filename
         
+    def loop(self):
+        if not self.running:
+            return
+        
+        self.screen.ontimer(self.loop, self.tick_speed_ms)
 
 
-    def is_catched(self):
-        p = self.runner.pos()
-        q = self.chaser.pos()
-        dx, dy = p[0] - q[0], p[1] - q[1]
-        return dx**2 + dy**2 < self.catch_radius2
+    def start(self):
 
-    def start(self, init_dist=400, ai_timer_msec=100):
-        self.runner.setpos((-init_dist / 2, 0))
-        self.runner.setheading(0)
-        self.chaser.setpos((+init_dist / 2, 0))
-        self.chaser.setheading(180)
+        if self.running:
+            return
+        
+        self.running = True
 
-        # TODO) You can do something here and follows.
-        self.ai_timer_msec = ai_timer_msec
-        self.screen.ontimer(self.step, self.ai_timer_msec)
+        self.screen.ontimer(self.loop, self.tick_speed_ms)
 
-    def step(self):
-        self.runner.run_ai(self.chaser.pos(), self.chaser.heading())
-        self.chaser.run_ai(self.runner.pos(), self.runner.heading())
-
-        # TODO) You can do something here and follows.
-        is_catched = self.is_catched()
-        self.drawer.undo()
-        self.drawer.penup()
-        self.drawer.setpos(-300, 300)
-        self.drawer.write(f'Is catched? {is_catched}')
-
-        # Note) The following line should be the last of this function to keep the game playing
-        self.screen.ontimer(self.step, self.ai_timer_msec)
 
 
 # direction enum
@@ -126,7 +102,9 @@ class AnimatedTurtle(GameObject):
     def __init__(self, game: RunawayGame, **kwargs):
         super().__init__(game, **kwargs)
         self.turtle = turtle.RawTurtle(game.screen)
-        self.turtle.hideturtle()
+        #self.turtle.hideturtle()
+        self.turtle.shape('turtle')
+        self.turtle.color('red')
         self.turtle.penup()
 
     def draw(self, _: turtle.RawTurtle) -> None:
@@ -257,10 +235,7 @@ class App:
 
         self.screen = turtle.TurtleScreen(self.canvas)
 
-        self.runner = RandomMover(self.screen)
-        self.chaser = ManualMover(self.screen)
-
-        self.game = RunawayGame(self.screen, self.runner, self.chaser)
+        self.game = RunawayGame(self.screen)
 
     def start(self):
         self.game.start()
