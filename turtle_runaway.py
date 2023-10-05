@@ -3,6 +3,7 @@
 import tkinter as tk
 import turtle, random
 import math
+import time
 from enum import Enum
 from dataclasses import dataclass, field
 
@@ -33,6 +34,7 @@ class RunawayGame:
 
         self.root.bind('<KeyPress>', self._on_key_press)
         self.root.bind('<KeyRelease>', self._on_key_release)
+        self.last_time = None
 
     def _on_key_press(self, event):
         self.pressed_keys[event.keysym] = True
@@ -47,6 +49,7 @@ class RunawayGame:
         return self.pressed_keys
 
     def load_level(self, level_id:int, seed:int=1234) -> None:
+        self.last_time = time.time()
         self.current_level = Level(self, level_id, seed)
 
     def get_current_level(self):
@@ -70,8 +73,16 @@ class RunawayGame:
         if not self.running:
             return
         
+        dt = self.tick_speed_ms / 1000
+        if self.last_time is not None:
+            dt = time.time() - self.last_time
+            self.last_time = time.time()
+        
         if self.current_level is not None:
-            self.current_level._tick(self.tick_speed_ms / 1000)
+            self.current_level._tick(dt)
+
+            self.drawer.clear()
+            self.current_level._draw(self.drawer)
 
         self.screen.update()
         
@@ -112,7 +123,6 @@ class GameObject:
         self.game = game
         self.children : list[GameObject] = []
         self.__dict__.update(kwargs)
-        print(self.__dict__)
 
     def add_child(self, child):
         self.children.append(child)
@@ -167,6 +177,28 @@ class TimedGameObject(GameObject):
         super().tick(dt)
 
 
+class TextObject(GameObject):
+
+    def __init__(self, game: RunawayGame, get_text: callable, position: tuple[float, float] = (0, 0), font: tuple[str, int, str] = ('Arial', 12, 'normal'), color: str = 'black', **kwargs):
+        super().__init__(game, **kwargs)
+        self.get_text = get_text
+        self.position = position
+        self.font = font
+        self.color = color
+        self.text = ""
+
+    def draw(self, pen: turtle.RawTurtle):
+        pen.penup()
+        pen.goto(self.position)
+        pen.pendown()
+        pen.color(self.color)
+        pen.write(self.text, font=self.font)
+
+
+    def tick(self, dt: float):
+        self.text = self.get_text()
+        super().tick(dt)
+
 class Level(GameObject):
     def __init__(self, game: RunawayGame, id:int, seed:int=1234, **kwargs):
         super().__init__(game, **kwargs)
@@ -175,6 +207,7 @@ class Level(GameObject):
 
         self.time : float = 0
         self.timer = 9999
+        self.score = 0
 
         self.player = Player(game, x=0, y=0)
         self.add_child(self.player)
@@ -188,7 +221,46 @@ class Level(GameObject):
         """
         Generates the level based on id and seed
         """
-        self.timer = 60 + self.id * 20
+        self.timer = 30 + self.id * 10
+
+        # add timer display
+        timer = TextObject(
+            self.game,
+            lambda: f"Time: {math.ceil(self.timer)}",
+            position=(-360, 360),
+            font=('Arial', 12, 'normal'),
+            color='black'
+        )
+
+        self.add_child(timer)
+
+        score = TextObject(
+            self.game,
+            lambda: f"Score: {math.ceil(self.score):,}",
+            position=(360-60, 360),
+            font=('Arial', 12, 'normal'),
+            color='black'
+        )
+
+        self.add_child(score)
+
+        level_name = TextObject(
+            self.game,
+            lambda: f"Level: {self.id}",
+            position=(0, 0),
+            font=('Arial', 32, 'normal'),
+            color='red'
+        )
+
+        level_name_timer = TimedGameObject(
+            self.game,
+            0,
+            2,
+            children=[level_name]
+        )
+
+        self.add_child(level_name_timer)
+
 
     def _tick(self, dt: float):
         if self.timer > 0:
@@ -197,13 +269,13 @@ class Level(GameObject):
     def tick(self, dt: float):
         self.time += dt
         self.timer -= dt
-        print(self.timer)
+        self.score += dt * 10
 
     def is_completed(self):
         return self.timer <= 0
     
     def get_score(self):
-        return 0
+        return self.score
 
 
 
