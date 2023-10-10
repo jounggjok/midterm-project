@@ -59,7 +59,7 @@ class RunawayGame:
     def get_keys_pressed(self):
         return self.pressed_keys
 
-    def load_level(self, level_id:int, seed:int=1234, score=0) -> None:
+    def load_level(self, level_id:int, seed:int=1337, score=0) -> None:
         
         self.score = score
 
@@ -270,7 +270,7 @@ class PowerUp(GameObject):
         if not self.game.get_current_level().is_running():
             return
         # check for collision with turtle
-        for child in self.game.get_current_level():
+        for child in self.game.get_current_level().children:
             if isinstance(child, MovingTurtle):
                 if self.get_collision(child):
                     child.boost_timer = self.duration
@@ -331,8 +331,6 @@ class Level(GameObject):
         self.player = Player(game, x=0, y=0)
         self.add_child(self.player)
 
-        self.ai = AITurtle(game)
-        self.add_child(self.ai)
 
         self.generate_level()
         self.caught = False
@@ -347,7 +345,7 @@ class Level(GameObject):
         Generates the level based on id and seed
         """
         random.seed(self.seed+self.id)
-        self.timer = 10 + self.id * 10
+        self.timer = 10 + self.id * 2
 
         # add timer display
         timer = TextObject(
@@ -389,7 +387,7 @@ class Level(GameObject):
 
 
         # add some random powerups
-        for _ in range(2+random.randint(0, 4)):
+        for _ in range(3+random.randint(0, 4)):
             powerup = PowerUp(
                 self.game,
                 random.randint(5, 10),
@@ -401,7 +399,34 @@ class Level(GameObject):
             self.add_child(powerup)
 
         
-        
+        # add ai turtles
+        ai_count = 1 + math.floor(self.id / 1.2 * random.random())
+        easy_chance = 1 / (1 + self.id / 2)
+
+        for _ in range(ai_count):
+            speed = 1 + random.random() * self.id / 20
+            # pos not in player radius
+            pos = (random.randint(-400, 400), random.randint(-400, 400))
+            while abs(pos[0] - self.player.x) < 100 and abs(pos[1] - self.player.y) < 100:
+                pos = (random.randint(-400, 400), random.randint(-400, 400))
+
+            if random.random() < easy_chance:
+                ai = AITurtle(
+                    self.game,
+                    x = pos[0],
+                    y = pos[1],
+                    speed = speed
+                )
+
+            else:
+                ai = AI2000Turtle(
+                    self.game,
+                    x = pos[0],
+                    y = pos[1],
+                    speed = speed
+                )
+
+            self.add_child(ai)
 
 
 
@@ -440,7 +465,7 @@ class Level(GameObject):
 
                 level_clear = TextObject(
                     self.game,
-                    lambda: f"Level Ccompleted! Score: {math.ceil(self.score):,}\nPress SPACE to continue",
+                    lambda: f"Level Completed! Score: {math.ceil(self.score):,}\nPress SPACE to continue",
                     position=(-300, 0),
                     font=('Arial', 32, 'normal'),
                     color='red'
@@ -514,7 +539,7 @@ class MovingTurtle(AnimatedTurtle):
         self.speed: float = 1.0
         self.boost_multiplier: float = 1.0
         self.boost_timer: float = 0.0
-        self.radius = 15
+        self.radius = 13
 
     def _tick(self, dt: float):
         if not self.game.get_current_level().is_running():
@@ -530,6 +555,17 @@ class MovingTurtle(AnimatedTurtle):
             self.boost_timer = 0
 
         super().tick(dt)
+
+    def move_direction(self, direction: Direction) -> None:
+        match direction:
+            case Direction.LEFT:
+                self.left()
+            case Direction.RIGHT:
+                self.right()
+            case Direction.UP:
+                self.up()
+            case Direction.DOWN:
+                self.down()
 
     def get_speed(self):
         if self.boost_timer > 0:
@@ -586,6 +622,7 @@ class Player(MovingTurtle):
         #self.turtle.shape(game.load_sprite('player.gif'))
         self.last_keys = {key: -1 for key in self.DIRECTION_KEYS}
         self.turtle.color('blue')
+        self.speed = 1.3
 
     def tick(self, dt: float) -> None:
         """
@@ -633,24 +670,41 @@ class Player(MovingTurtle):
 
 class AITurtle(MovingTurtle):
     def __init__(self, game: RunawayGame, **kwargs):
-        super().__init__(game, **kwargs, step_size=10, x = random.randint(-400, 400), y = random.randint(-400, 400))
+        super().__init__(game, **kwargs, step_size=10)
+        self.player = None
 
     
+    def get_player(self):
+        if self.player is None:
+            for child in self.game.get_current_level().children:
+                if isinstance(child, Player):
+                    self.player = child
+                    break
+        return self.player
+
     def do_movement(self):
 
-        player = None
-        for child in self.game.get_current_level().children:
-            if isinstance(child, Player):
-                player = child
-                break
+        # 90% chance to move forward
+        if random.random() < 0.9:
+            self.move_direction(self.direction)
+            return
+        
 
+        # 20% chance to move left or right randomly
+        if random.random() < 0.2:
+            self.direction = Direction((self.direction.value + random.choice([-1, 1]))%4)
+            self.move_direction(self.direction)
+            return
+
+
+        player = self.get_player()
         if player is None:
             return
         
         
         # get direction to player
-        dx = player.x - self.x
-        dy = player.y - self.y
+        dx = player.x*1.2 - player.x*0.4*random.random() - self.x
+        dy = player.y- player.y*0.4*random.random() - self.y
 
         # move towards player, pick the largest component
         if abs(dx) > abs(dy):
@@ -687,35 +741,80 @@ class AITurtle(MovingTurtle):
         
         self.do_movement()
 
-class AI2000Turtle(MovingTurtle):
+class AI2000Turtle(AITurtle):
     def __init__(self, game: RunawayGame, **kwargs):
-        super().__init__(game, **kwargs, step_size=10, x = random.randint(-400, 400), y = random.randint(-400, 400))
+        super().__init__(game, **kwargs)
+        self.turtle.color('black')
+        self.ratio = random.random()
+        self.speed = 0.8
 
-    def tick(self, dt: float) -> None:
-        """
-        Called every frame, moves the turtle"""
+    def do_movement(self):
+        player = self.get_player()
 
-        super().tick(dt)
 
-        player = None
-        for child in self.game.get_current_level().children:
-            if isinstance(child, Player):
-                player = child
-                break
+        # 80% chance to move forward
+        if random.random() < 0.8:
+            self.move_direction(self.direction)
+            return
 
         if player is None:
             return
         
-        # check if caught
-        if self.get_collision(player):
-            self.game.get_current_level().caught = True
-            return
+
+        powerups = []
+        for child in self.game.get_current_level().children:
+            if isinstance(child, PowerUp):
+                powerups.append((child, self.get_distance(child)))
+
+        powerups.sort(key=lambda x: x[1])
         
+        # try to predict player position
+        distance = self.get_distance(player)
+        time = distance / self.get_speed()
+        
+        px = player.x
+        py = player.y
+
+        match player.direction:
+            case Direction.UP:
+                py += player.get_speed() * time
+            case Direction.DOWN:
+                py -= player.get_speed() * time
+            case Direction.LEFT:
+                px -= player.get_speed() * time
+            case Direction.RIGHT:
+                px += player.get_speed() * time
+
         # get direction to player
-        dx = player.x - self.x
-        dy = player.y - self.y
+        dx = px - self.x
+        dy = py - self.y
+
+        dpx = player.x - self.x
+        dpy = player.y - self.y
+
+        ratio = self.ratio
+        dx = dx * ratio + dpx * (1 - ratio)
+        dy = dy * ratio + dpy * (1 - ratio)
+
+        # if powerup is closer than player/2, go for it
+        if len(powerups) > 0 and powerups[0][1] < distance / 2:
+            dx = powerups[0][0].x - self.x
+            dy = powerups[0][0].y - self.y
 
         # move towards player, pick the largest component
+        if abs(dx) > abs(dy):
+            if dx > 0:
+                self.right()
+            else:
+                self.left()
+        else:
+            if dy > 0:
+                self.up()
+            else:
+                self.down()
+
+
+        
         
 
 
