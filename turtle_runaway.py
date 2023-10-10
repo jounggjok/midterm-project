@@ -288,7 +288,7 @@ class PowerUp(GameObject):
         pen.penup()
         pen.goto(self.x, self.y)
         pen.pendown()
-        pen.color('green')
+        pen.color('gold')
         pen.begin_fill()
         pen.circle(self.radius)
         pen.end_fill()
@@ -406,6 +406,11 @@ class Level(GameObject):
 
 
     def tick(self, dt: float):
+
+        # check if out of bounds
+        if self.player.x < -400 or self.player.x > 400 or self.player.y < -400 or self.player.y > 400:
+            self.caught = True
+
         if self.caught:
 
             # check if R is pressed
@@ -458,6 +463,21 @@ class Level(GameObject):
     
     def get_score(self):
         return self.score
+    
+    def draw(self, pen: turtle.RawTurtle):
+         # draw red border
+        pen.penup()
+        pen.goto(-400, -400)
+        pen.pendown()
+        pen.color('red')
+        pen.pensize(3)
+        pen.goto(-400, 400)
+        pen.goto(400, 400)
+        pen.goto(400, -400)
+        pen.goto(-400, -400)
+        pen.pensize(1)
+
+        super().draw(pen)
 
 
 
@@ -565,6 +585,7 @@ class Player(MovingTurtle):
         super().__init__(game, **kwargs, step_size=10)
         #self.turtle.shape(game.load_sprite('player.gif'))
         self.last_keys = {key: -1 for key in self.DIRECTION_KEYS}
+        self.turtle.color('blue')
 
     def tick(self, dt: float) -> None:
         """
@@ -614,6 +635,62 @@ class AITurtle(MovingTurtle):
     def __init__(self, game: RunawayGame, **kwargs):
         super().__init__(game, **kwargs, step_size=10, x = random.randint(-400, 400), y = random.randint(-400, 400))
 
+    
+    def do_movement(self):
+
+        player = None
+        for child in self.game.get_current_level().children:
+            if isinstance(child, Player):
+                player = child
+                break
+
+        if player is None:
+            return
+        
+        
+        # get direction to player
+        dx = player.x - self.x
+        dy = player.y - self.y
+
+        # move towards player, pick the largest component
+        if abs(dx) > abs(dy):
+            if dx > 0:
+                self.right()
+            else:
+                self.left()
+        else:
+            if dy > 0:
+                self.up()
+            else:
+                self.down()
+
+    
+    def tick(self, dt: float) -> None:
+        """
+        Called every frame, moves the turtle"""
+
+        super().tick(dt)
+
+        player = None
+        for child in self.game.get_current_level().children:
+            if isinstance(child, Player):
+                player = child
+                break
+
+        if player is None:
+            return
+        
+        # check if caught
+        if self.get_collision(player):
+            self.game.get_current_level().caught = True
+            return
+        
+        self.do_movement()
+
+class AI2000Turtle(MovingTurtle):
+    def __init__(self, game: RunawayGame, **kwargs):
+        super().__init__(game, **kwargs, step_size=10, x = random.randint(-400, 400), y = random.randint(-400, 400))
+
     def tick(self, dt: float) -> None:
         """
         Called every frame, moves the turtle"""
@@ -639,16 +716,7 @@ class AITurtle(MovingTurtle):
         dy = player.y - self.y
 
         # move towards player, pick the largest component
-        if abs(dx) > abs(dy):
-            if dx > 0:
-                self.right()
-            else:
-                self.left()
-        else:
-            if dy > 0:
-                self.up()
-            else:
-                self.down()
+        
 
 
 
