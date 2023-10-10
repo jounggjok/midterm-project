@@ -22,6 +22,8 @@ class RunawayGame:
 
         self.sprites = {}
 
+        self.score = 0
+
         self.running = False
         self.tick_speed_ms = 1000 // 60
 
@@ -36,6 +38,15 @@ class RunawayGame:
         self.root.bind('<KeyRelease>', self._on_key_release)
         self.last_time = None
 
+    def reset(self):
+        self.current_level_id = 0
+        self.score = 0
+
+
+        self.load_level(self.current_level_id)
+
+
+
     def _on_key_press(self, event):
         self.pressed_keys[event.keysym] = True
 
@@ -48,9 +59,22 @@ class RunawayGame:
     def get_keys_pressed(self):
         return self.pressed_keys
 
-    def load_level(self, level_id:int, seed:int=1234) -> None:
+    def load_level(self, level_id:int, seed:int=1234, score=0) -> None:
+        
+        self.score = score
+
+        # delete turtle objects
+        if self.current_level is not None:
+            for child in self.current_level.children:
+                if isinstance(child, AnimatedTurtle):
+                    child.turtle.clear()
+                    child.turtle.hideturtle()
+                    child.turtle._tracer(1, 0)
+                    del child.turtle
+
         self.last_time = time.time()
         self.current_level = Level(self, level_id, seed)
+        self.current_level.score = self.score
 
     def get_current_level(self):
         return self.current_level
@@ -108,6 +132,39 @@ class Direction(Enum):
     DOWN = 3
 
 
+class GOIterator:
+    def __init__(self, obj):
+        self.obj = obj
+        self.index = 0
+        self.i = 0
+
+    def _get_go(self, go):
+        for child in go.children:
+            if self.i > self.index:
+                raise StopIteration
+            if self.i == self.index:
+                return child
+            self.i += 1
+
+            result = self._get_go(child)
+            if result is not None:
+                return result
+        raise StopIteration
+
+            
+        
+
+        
+
+    def __next__(self):
+        self.i = 0
+        e = self._get_go(self.obj)
+        self.index += 1
+        return e
+
+    def __iter__(self):
+        return self
+
 @dataclass
 class GameObject:
     game: RunawayGame
@@ -117,6 +174,8 @@ class GameObject:
     x_vel: float = 0
     y_vel: float = 0
     children: list = field(default_factory=list)
+    radius: float = 10
+    parent = None
 
 
     def __init__(self, game: RunawayGame, **kwargs):
@@ -126,6 +185,7 @@ class GameObject:
 
     def add_child(self, child):
         self.children.append(child)
+        child.parent = self
 
     def _tick(self, dt: float):
         self.tick(dt)
@@ -142,6 +202,25 @@ class GameObject:
 
     def draw(self, pen: turtle.RawTurtle):
         pass
+
+    def __iter__(self):
+        return GOIterator(self)
+    
+    def get_distance(self, other):
+        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
+    
+    def get_distance_squared(self, other):
+        return (self.x - other.x)**2 + (self.y - other.y)**2
+    
+    def get_collision(self, other):
+        return self.get_distance_squared(other) < (self.radius + other.radius)**2
+    
+    def remove(self, child):
+        self.children.remove(child)
+
+    def remove_me(self):
+        if self.parent is not None:
+            self.parent.remove(self)
 
 
 class TimedGameObject(GameObject):
@@ -175,6 +254,46 @@ class TimedGameObject(GameObject):
             self.drawMe = False
 
         super().tick(dt)
+
+
+class PowerUp(GameObject):
+    """gives the turtle a speedboost"""
+
+    def __init__(self, game: RunawayGame, duration: int, boost: int = 2, score: int = 50, **kwargs):
+        super().__init__(game, **kwargs)
+        self.duration = duration
+        self.boost = boost
+        self.score = score
+
+    def tick(self, dt: float):
+        # check if level is running
+        if not self.game.get_current_level().is_running():
+            return
+        # check for collision with turtle
+        for child in self.game.get_current_level():
+            if isinstance(child, MovingTurtle):
+                if self.get_collision(child):
+                    child.boost_timer = self.duration
+                    child.boost_multiplier = self.boost if child.boost_multiplier < self.boost else child.boost_multiplier
+
+                    # add score
+                    self.game.get_current_level().score += self.score
+
+                    self.remove_me()
+                    break
+
+        super().tick(dt)
+
+    def draw(self, pen: turtle.RawTurtle):
+        pen.penup()
+        pen.goto(self.x, self.y)
+        pen.pendown()
+        pen.color('green')
+        pen.begin_fill()
+        pen.circle(self.radius)
+        pen.end_fill()
+                
+
 
 
 class TextObject(GameObject):
@@ -216,12 +335,19 @@ class Level(GameObject):
         self.add_child(self.ai)
 
         self.generate_level()
+        self.caught = False
+        self.added_game_over = False
+        self.added_level_clear = False
+
+    def is_running(self):
+        return self.timer > 0 and not self.caught and self.time > 2
 
     def generate_level(self):
         """
         Generates the level based on id and seed
         """
-        self.timer = 30 + self.id * 10
+        random.seed(self.seed+self.id)
+        self.timer = 10 + self.id * 10
 
         # add timer display
         timer = TextObject(
@@ -262,11 +388,67 @@ class Level(GameObject):
         self.add_child(level_name_timer)
 
 
-    def _tick(self, dt: float):
-        if self.timer > 0:
-            return super()._tick(dt)
+        # add some random powerups
+        for _ in range(2+random.randint(0, 4)):
+            powerup = PowerUp(
+                self.game,
+                random.randint(5, 10),
+                random.random()+1,
+                x = random.randint(-400, 400),
+                y = random.randint(-400, 400)
+            )
+
+            self.add_child(powerup)
+
+        
+        
+
+
 
     def tick(self, dt: float):
+        if self.caught:
+
+            # check if R is pressed
+            if self.game.is_key_pressed('r'):
+                self.game.reset()
+                return
+
+            if not self.added_game_over:
+                self.added_game_over = True
+
+                game_over = TextObject(
+                    self.game,
+                    lambda: f"Game Over! Score: {math.ceil(self.score):,}\nPress R to restart",
+                    position=(-200, 0),
+                    font=('Arial', 32, 'normal'),
+                    color='red'
+                )
+
+                self.add_child(game_over)
+
+            return
+        
+        if self.timer <= 0:
+            # add level clear text
+            if not self.added_level_clear:
+                self.added_level_clear = True
+
+                level_clear = TextObject(
+                    self.game,
+                    lambda: f"Level Ccompleted! Score: {math.ceil(self.score):,}\nPress SPACE to continue",
+                    position=(-300, 0),
+                    font=('Arial', 32, 'normal'),
+                    color='red'
+                )
+
+                self.add_child(level_clear)
+
+            # check if space is pressed
+            if self.game.is_key_pressed('space'):
+                self.game.load_level(self.id+1, self.seed, self.score)
+                return
+            return
+
         self.time += dt
         self.timer -= dt
         self.score += dt * 10
@@ -310,30 +492,54 @@ class MovingTurtle(AnimatedTurtle):
         super().__init__(game, **kwargs)
         self.step_size = step_size
         self.speed: float = 1.0
+        self.boost_multiplier: float = 1.0
+        self.boost_timer: float = 0.0
+        self.radius = 15
+
+    def _tick(self, dt: float):
+        if not self.game.get_current_level().is_running():
+            return
+        super()._tick(dt)
+
+    def tick(self, dt: float) -> None:
+        """
+        Called every frame, moves the turtle"""
+
+        self.boost_timer -= dt
+        if self.boost_timer < 0:
+            self.boost_timer = 0
+
+        super().tick(dt)
+
+    def get_speed(self):
+        if self.boost_timer > 0:
+            return self.speed * self.boost_multiplier * self.step_size
+        else:
+            return self.speed * self.step_size
 
     def left(self) -> None:
         self.direction = Direction.LEFT
         self.turtle.setheading(self.direction.value * 90)
-        self.x -= self.step_size * self.speed
+        self.x -= self.get_speed()
         
         self.turtle.setpos(self.x, self.y)
 
     def right(self) -> None:
         self.direction = Direction.RIGHT
         self.turtle.setheading(self.direction.value * 90)
-        self.x += self.step_size * self.speed
+        self.x += self.get_speed()
         self.turtle.setpos(self.x, self.y)
 
     def up(self) -> None:
         self.direction = Direction.UP
         self.turtle.setheading(self.direction.value * 90)
-        self.y += self.step_size * self.speed
+        self.y += self.get_speed()
         self.turtle.setpos(self.x, self.y)
 
     def down(self) -> None:
         self.direction = Direction.DOWN
         self.turtle.setheading(self.direction.value * 90)
-        self.y -= self.step_size * self.speed
+        self.y -= self.get_speed()
         self.turtle.setpos(self.x, self.y)
 
     def draw(self, _: turtle.RawTurtle) -> None:
@@ -363,6 +569,8 @@ class Player(MovingTurtle):
     def tick(self, dt: float) -> None:
         """
         Called every frame, moves the player"""
+
+        super().tick(dt)
 
         # get current keys pressed, prioritise new presses over old ones
         keys = self.game.get_keys_pressed()
@@ -396,7 +604,8 @@ class Player(MovingTurtle):
 
 
         if "space" in keys and keys["space"]:
-            self.speed = 2.0
+            pass
+            #self.speed = 2.0
         else:
             self.speed = 1.0
 
@@ -409,6 +618,7 @@ class AITurtle(MovingTurtle):
         """
         Called every frame, moves the turtle"""
 
+        super().tick(dt)
 
         player = None
         for child in self.game.get_current_level().children:
@@ -417,6 +627,11 @@ class AITurtle(MovingTurtle):
                 break
 
         if player is None:
+            return
+        
+        # check if caught
+        if self.get_collision(player):
+            self.game.get_current_level().caught = True
             return
         
         # get direction to player
