@@ -13,7 +13,5 @@ Source of the original project : (https://github.com/4-en/RunawayGame/tree/main#
 6. Update log
 
 
-11/29 Add project to use, add read me
-
-
+11/29 Add project to use, add read me\
 12/14 Changing the subject of the project & create project
